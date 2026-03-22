@@ -110,6 +110,7 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
+  const [resultSource, setResultSource] = useState('none')
   const [cfg, setCfg] = useState({
     ticks: 500,
     sigma: 1.0,
@@ -322,6 +323,7 @@ export default function App() {
     if (DEMO_MODE) {
       const demo = generateDemoResult(cfg)
       setResult(demo)
+      setResultSource('demo-config')
       setPlayIdx(0)
       setAutoPlay(true)
       showToast('Run Simulation completed (demo mode)', 'success')
@@ -339,6 +341,7 @@ export default function App() {
       }
       const data = await response.json()
       setResult(data)
+      setResultSource('backend')
       setPlayIdx(0)
       setAutoPlay(true)
       showToast('Run Simulation completed', 'success')
@@ -346,6 +349,7 @@ export default function App() {
       setError('Backend unavailable. Showing demo mode results.')
       const demo = generateDemoResult(cfg)
       setResult(demo)
+      setResultSource('demo-fallback')
       setPlayIdx(0)
       setAutoPlay(true)
       showToast('Backend unavailable; using demo fallback', 'warn')
@@ -438,6 +442,12 @@ export default function App() {
 
       <section className="card">
         Strategy state: <strong>{strategyEnabled ? 'Running' : 'Paused'}</strong>
+      </section>
+
+      <section className="card">
+        Mode: <strong>{DEMO_MODE ? 'Demo mode (no backend)' : 'Backend mode'}</strong>
+        {' | '}Result source: <strong>{resultSource}</strong>
+        {' | '}API: <strong>{API}</strong>
       </section>
 
       <section className="card manual-controls">
