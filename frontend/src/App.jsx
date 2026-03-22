@@ -16,7 +16,16 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, T
 const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 const DEMO_MODE = String(import.meta.env.VITE_DEMO_MODE || 'false') === 'true'
 
+function createSeededRng(seed) {
+  let state = (Number(seed) || 1) >>> 0
+  return () => {
+    state = (1664525 * state + 1013904223) >>> 0
+    return state / 4294967296
+  }
+}
+
 function generateDemoResult(cfg) {
+  const rand = createSeededRng(cfg.seed)
   const ticks = Math.max(20, Number(cfg.ticks || 500))
   let price = 100
   let inventory = 0
@@ -28,7 +37,7 @@ function generateDemoResult(cfg) {
   let lastPnl = 0
 
   for (let t = 1; t <= ticks; t += 1) {
-    const eps = (Math.random() - 0.5) * 2
+    const eps = (rand() - 0.5) * 2
     price = Math.max(1, price + 0.03 + Number(cfg.sigma || 1.2) * eps)
 
     const r = price - inventory * Number(cfg.gamma || 0.08) * (Number(cfg.sigma || 1.2) ** 2)
@@ -36,13 +45,13 @@ function generateDemoResult(cfg) {
     const bid = r - d
     const ask = r + d
 
-    if (Math.random() < 0.55) {
+    if (rand() < 0.55) {
       inventory += 1
       cash -= bid
       spreadCapture += Math.max(0, price - bid)
       trades += 1
     }
-    if (Math.random() < 0.55) {
+    if (rand() < 0.55) {
       inventory -= 1
       cash += ask
       spreadCapture += Math.max(0, ask - price)
@@ -60,6 +69,8 @@ function generateDemoResult(cfg) {
   const variance = rets.reduce((a, x) => a + (x - mean) ** 2, 0) / Math.max(1, rets.length - 1)
   const std = Math.sqrt(variance)
   const sharpe = std > 0 ? mean / std : 0
+  const sharpeHorizonScaled = sharpe * Math.sqrt(Math.max(series.length, 1))
+  const sharpeAnnualized252 = sharpe * Math.sqrt(252)
 
   let peak = -Infinity
   let maxDrawdown = 0
@@ -85,6 +96,8 @@ function generateDemoResult(cfg) {
       trades,
       spread_capture: spreadCapture,
       sharpe,
+      sharpe_horizon_scaled: sharpeHorizonScaled,
+      sharpe_annualized_252: sharpeAnnualized252,
       max_drawdown: maxDrawdown,
       win_loss_ratio: winLoss
     },
