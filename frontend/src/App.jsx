@@ -77,6 +77,8 @@ function generateDemoResultCore(cfg, strategyEnabled = true, enforceOrdering = t
   const baseDelta = Math.max(0.01, Number(cfg.delta || 0.08))
   const maxInventory = Math.max(1, Number(cfg.max_inventory || 30))
   const stopLoss = Number(cfg.stop_loss ?? -250)
+  const makerRebatePerFill = 0.25
+  const toxicFillPenalty = 0.45 * sigma
   const series = []
 
   for (let t = 1; t <= ticks; t += 1) {
@@ -119,23 +121,25 @@ function generateDemoResultCore(cfg, strategyEnabled = true, enforceOrdering = t
       if (rand() < buyProb) {
         inventory += 1
         cash -= bid
+        cash += makerRebatePerFill
         spreadCapture += Math.max(0, price - bid)
         trades += 1
 
         // In adversarial regime, toxic buy fills happen before further down-move.
         if (advOn && toxicBuy) {
-          cash -= 0.32 * sigma
+          cash -= toxicFillPenalty
         }
       }
       if (rand() < sellProb) {
         inventory -= 1
         cash += ask
+        cash += makerRebatePerFill
         spreadCapture += Math.max(0, ask - price)
         trades += 1
 
         // In adversarial regime, toxic sell fills happen before further up-move.
         if (advOn && toxicSell) {
-          cash -= 0.32 * sigma
+          cash -= toxicFillPenalty
         }
       }
 

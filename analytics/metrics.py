@@ -13,6 +13,8 @@ class AnalyticsEngine:
     cash: float = 0.0
     trade_count: int = 0
     spread_capture: float = 0.0
+    maker_rebate_per_unit: float = 0.4
+    toxicity_penalty_per_unit: float = 0.05
     pnl_series: List[float] = field(default_factory=list)
     returns: List[float] = field(default_factory=list)
     logs: List[Dict] = field(default_factory=list)
@@ -23,12 +25,18 @@ class AnalyticsEngine:
             self.cash -= trade.quantity * trade.price
             self.trade_count += 1
             self.spread_capture += max(0.0, mid - trade.price) * trade.quantity
+            self.cash += self.maker_rebate_per_unit * trade.quantity
+            if trade.sell_owner == "adversarial":
+                self.cash -= self.toxicity_penalty_per_unit * trade.quantity
 
         if trade.sell_owner == "mm":
             self.inventory -= trade.quantity
             self.cash += trade.quantity * trade.price
             self.trade_count += 1
             self.spread_capture += max(0.0, trade.price - mid) * trade.quantity
+            self.cash += self.maker_rebate_per_unit * trade.quantity
+            if trade.buy_owner == "adversarial":
+                self.cash -= self.toxicity_penalty_per_unit * trade.quantity
 
     def mark_to_market_pnl(self, mid: float) -> float:
         return self.cash + self.inventory * mid

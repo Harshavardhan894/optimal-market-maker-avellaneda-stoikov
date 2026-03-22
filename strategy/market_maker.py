@@ -40,6 +40,8 @@ class MarketMakerConfig:
     adaptive_drawdown_spread_boost: float = 1.6
     adaptive_drawdown_size_factor: float = 0.65
     adaptive_recovery_tighten: float = 0.9
+    emergency_unwind_drawdown_ratio: float = 0.3
+    emergency_unwind_size_multiplier: float = 3.0
 
 
 @dataclass
@@ -112,13 +114,16 @@ class AvellanedaStoikovMarketMaker:
         self.pnl_delta_ema = a * pnl_delta + (1.0 - a) * self.pnl_delta_ema
         drawdown = max(0.0, self.peak_pnl - pnl)
         drawdown_ratio = drawdown / max(abs(self.peak_pnl) + 1.0, 1.0)
+        sigma_eff = self._effective_sigma(sigma_t)
+        stress_signal = 0.0
+        if self.config.adaptive_risk:
+            stress_signal = min(1.0, max(0.0, -self.pnl_delta_ema) / (sigma_eff + 1e-8) + drawdown_ratio)
 
         self.cancel_stale_orders(lob)
         market_spread = None
         if best_bid is not None and best_ask is not None and best_ask >= best_bid:
             market_spread = best_ask - best_bid
 
-        sigma_eff = self._effective_sigma(sigma_t)
         trend = max(-1.0, min(1.0, trend_signal or 0.0))
 
         # Volatility-aware reservation price + trend skew:
@@ -144,11 +149,14 @@ class AvellanedaStoikovMarketMaker:
         if self.config.adaptive_risk:
             if self.pnl_delta_ema < 0 or drawdown_ratio > 0:
                 # Stronger protection when losses persist.
-                stress = min(1.0, max(0.0, -self.pnl_delta_ema) / (sigma_eff + 1e-8) + drawdown_ratio)
-                d *= 1.0 + (self.config.adaptive_drawdown_spread_boost - 1.0) * stress
+                d *= 1.0 + (self.config.adaptive_drawdown_spread_boost - 1.0) * stress_signal
             else:
                 # Mild tightening during stable recovery.
                 d *= self.config.adaptive_recovery_tighten
+
+        # If stress is extreme and inventory is flat, skip quoting to preserve capital.
+        if self.config.adaptive_risk and stress_signal > 0.98 and inventory == 0 and t > max(20, self.config.T // 10):
+            return
 
         # Extra skew to reinforce inventory mean reversion.
         # inventory > 0 -> shift both quotes down (sell easier, buy harder)
@@ -183,8 +191,7 @@ class AvellanedaStoikovMarketMaker:
 
         if self.config.adaptive_risk:
             if self.pnl_delta_ema < 0 or drawdown_ratio > 0:
-                stress = min(1.0, max(0.0, -self.pnl_delta_ema) / (sigma_eff + 1e-8) + drawdown_ratio)
-                size_factor = 1.0 - (1.0 - self.config.adaptive_drawdown_size_factor) * stress
+                size_factor = 1.0 - (1.0 - self.config.adaptive_drawdown_size_factor) * stress_signal
                 buy_size = max(1, int(math.floor(buy_size * size_factor)))
                 sell_size = max(1, int(math.floor(sell_size * size_factor)))
 
@@ -206,6 +213,35 @@ class AvellanedaStoikovMarketMaker:
             elif inventory < 0:
                 allow_sell = False
                 allow_buy = True
+
+        # Emergency aggressive unwind under deep drawdown.
+        emergency_unwind = drawdown_ratio >= self.config.emergency_unwind_drawdown_ratio or inv_ratio >= self.config.inventory_hard_limit_ratio
+        if emergency_unwind and best_bid is not None and best_ask is not None:
+            unwind_size = max(1, int(math.ceil(base_size * self.config.emergency_unwind_size_multiplier)))
+            if inventory > 0:
+                unwind_qty = min(unwind_size, abs(inventory))
+                ask_aggr = max(0.01, best_bid)
+                ask_id = lob.add_order(
+                    price=ask_aggr,
+                    quantity=unwind_qty,
+                    is_buy=False,
+                    timestamp=t,
+                    owner="mm",
+                )
+                self.active_order_ids.append(ask_id)
+                return
+            if inventory < 0:
+                unwind_qty = min(unwind_size, abs(inventory))
+                bid_aggr = max(0.01, best_ask)
+                bid_id = lob.add_order(
+                    price=bid_aggr,
+                    quantity=unwind_qty,
+                    is_buy=True,
+                    timestamp=t,
+                    owner="mm",
+                )
+                self.active_order_ids.append(bid_id)
+                return
 
         # Toxicity gating against adverse selection.
         # In strong uptrend, do not continue offering asks when already short.
