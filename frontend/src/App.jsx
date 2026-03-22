@@ -440,12 +440,6 @@ export default function App() {
         Strategy state: <strong>{strategyEnabled ? 'Running' : 'Paused'}</strong>
       </section>
 
-      <section className="card">
-        Mode: <strong>Backend only</strong>
-        {' | '}Result source: <strong>{resultSource}</strong>
-        {' | '}API: <strong>{apiBase || 'not set'}</strong>
-      </section>
-
       <section className="card manual-controls">
         <h3>Manual LOB Controls</h3>
         <div className="manual-grid">
