@@ -67,10 +67,6 @@ scripts/
 
 ---
 
-## Local development
-
-> `frontend/index.html` is not a standalone app page. Use the dev server or built assets.
-
 ### Quick start (recommended)
 
 ```bash
