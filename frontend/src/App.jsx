@@ -59,6 +59,8 @@ function generateDemoResult(cfg, strategyEnabled = true) {
     if (strategyActive) {
       let buyProb = 0.52
       let sellProb = 0.52
+      let toxicBuy = false
+      let toxicSell = false
 
       if (advOn) {
         // Adverse selection: toxic flow lifts our ask into rising prices,
@@ -66,9 +68,11 @@ function generateDemoResult(cfg, strategyEnabled = true) {
         if (trend >= 0) {
           sellProb += 0.25
           buyProb -= 0.18
+          toxicSell = true
         } else {
           buyProb += 0.25
           sellProb -= 0.18
+          toxicBuy = true
         }
       }
 
@@ -83,12 +87,22 @@ function generateDemoResult(cfg, strategyEnabled = true) {
         cash -= bid
         spreadCapture += Math.max(0, price - bid)
         trades += 1
+
+        // In adversarial regime, toxic buy fills happen before further down-move.
+        if (advOn && toxicBuy) {
+          cash -= 0.32 * sigma
+        }
       }
       if (rand() < sellProb) {
         inventory -= 1
         cash += ask
         spreadCapture += Math.max(0, ask - price)
         trades += 1
+
+        // In adversarial regime, toxic sell fills happen before further up-move.
+        if (advOn && toxicSell) {
+          cash -= 0.32 * sigma
+        }
       }
 
       // Toxic continuation move after getting hit on the wrong side.
@@ -98,6 +112,11 @@ function generateDemoResult(cfg, strategyEnabled = true) {
         } else if (trend < 0 && buyProb > sellProb) {
           price = Math.max(1, price - 0.35 * sigma)
         }
+      }
+
+      // Extra per-trade toxicity friction in adversarial market.
+      if (advOn && trades > 0) {
+        cash -= 0.015 * sigma
       }
     }
 
