@@ -25,45 +25,80 @@ function createSeededRng(seed) {
   }
 }
 
-function generateDemoResult(cfg) {
+function generateDemoResult(cfg, strategyEnabled = true) {
   const rand = createSeededRng(cfg.seed)
   const ticks = Math.max(20, Number(cfg.ticks || 500))
   let price = 100
+  let prevPrice = price
   let inventory = 0
   let cash = 0
   let trades = 0
   let spreadCapture = 0
+  let strategyActive = Boolean(strategyEnabled)
+  const advOn = Boolean(cfg.enable_adversarial)
+  const sigma = Number(cfg.sigma || 1.2)
+  const gamma = Number(cfg.gamma || 0.08)
+  const baseDelta = Math.max(0.01, Number(cfg.delta || 0.08))
+  const maxInventory = Math.max(1, Number(cfg.max_inventory || 30))
+  const stopLoss = Number(cfg.stop_loss ?? -250)
   const series = []
   const rets = []
   let lastPnl = 0
 
   for (let t = 1; t <= ticks; t += 1) {
+    const advShock = advOn && rand() < 0.2 ? (rand() < 0.5 ? -1 : 1) * (0.7 + 0.8 * rand()) : 0
     const eps = (rand() - 0.5) * 2
-    price = Math.max(1, price + 0.03 + Number(cfg.sigma || 1.2) * eps)
+    price = Math.max(1, price + 0.03 + sigma * (0.6 * eps + 0.4 * advShock))
 
-    const r = price - inventory * Number(cfg.gamma || 0.08) * (Number(cfg.sigma || 1.2) ** 2)
-    const d = Math.max(0.01, Number(cfg.delta || 0.08))
+    const trend = price > prevPrice ? 1 : price < prevPrice ? -1 : 0
+    const r = price - inventory * gamma * (sigma ** 2)
+    const d = baseDelta * (advOn ? 1.2 : 1.0)
     const bid = r - d
     const ask = r + d
 
-    if (rand() < 0.55) {
-      inventory += 1
-      cash -= bid
-      spreadCapture += Math.max(0, price - bid)
-      trades += 1
-    }
-    if (rand() < 0.55) {
-      inventory -= 1
-      cash += ask
-      spreadCapture += Math.max(0, ask - price)
-      trades += 1
+    if (strategyActive) {
+      let buyProb = 0.5
+      let sellProb = 0.5
+
+      if (advOn) {
+        if (trend > 0) {
+          sellProb += 0.18
+          buyProb -= 0.12
+        } else if (trend < 0) {
+          buyProb += 0.18
+          sellProb -= 0.12
+        }
+      }
+
+      if (inventory >= maxInventory) buyProb = 0
+      if (inventory <= -maxInventory) sellProb = 0
+
+      buyProb = Math.max(0, Math.min(1, buyProb))
+      sellProb = Math.max(0, Math.min(1, sellProb))
+
+      if (rand() < buyProb) {
+        inventory += 1
+        cash -= bid
+        spreadCapture += Math.max(0, price - bid)
+        trades += 1
+      }
+      if (rand() < sellProb) {
+        inventory -= 1
+        cash += ask
+        spreadCapture += Math.max(0, ask - price)
+        trades += 1
+      }
     }
 
     const pnl = cash + inventory * price
+    if (strategyActive && pnl <= stopLoss) {
+      strategyActive = false
+    }
     rets.push(pnl - lastPnl)
     lastPnl = pnl
 
     series.push({ timestamp: t, price, inventory, pnl, trades })
+    prevPrice = price
   }
 
   const mean = rets.reduce((a, b) => a + b, 0) / Math.max(1, rets.length)
@@ -321,7 +356,7 @@ export default function App() {
     showToast('Run Simulation started', 'info')
     const payload = { ...cfg, strategy_enabled: strategyEnabled }
     if (isDemoMode) {
-      const demo = generateDemoResult(cfg)
+      const demo = generateDemoResult(cfg, strategyEnabled)
       setResult(demo)
       setResultSource('demo')
       setPlayIdx(0)
@@ -346,7 +381,7 @@ export default function App() {
       setAutoPlay(true)
       showToast('Run Simulation completed', 'success')
     } catch (e) {
-      const demo = generateDemoResult(cfg)
+      const demo = generateDemoResult(cfg, strategyEnabled)
       setResult(demo)
       setResultSource('demo-fallback')
       setPlayIdx(0)
