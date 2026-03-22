@@ -14,6 +14,7 @@ import {
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend)
 
 const ENV_API = String(import.meta.env.VITE_API_BASE_URL || '').trim()
+const ENV_DEMO_MODE = String(import.meta.env.VITE_DEMO_MODE || 'false') === 'true'
 const DEFAULT_API = ENV_API || (import.meta.env.DEV ? 'http://localhost:8000' : '')
 
 function createSeededRng(seed) {
@@ -138,6 +139,7 @@ export default function App() {
   const [toast, setToast] = useState({ message: '', type: 'info', visible: false })
   const toastTimerRef = useRef(null)
   const isBackendConfigured = Boolean(apiBase)
+  const isDemoMode = ENV_DEMO_MODE || !isBackendConfigured
 
   const showToast = (message, type = 'info') => {
     if (toastTimerRef.current) {
@@ -157,9 +159,8 @@ export default function App() {
   }
 
   const refreshBook = async () => {
-    if (!isBackendConfigured) {
-      setBookStatus('Backend API is not configured for this deployment.')
-      showToast('Backend API is not configured', 'error')
+    if (isDemoMode) {
+      setBookStatus('Manual order controls require backend mode.')
       return
     }
     try {
@@ -174,9 +175,8 @@ export default function App() {
   }
 
   const addManualOrder = async (isBuy) => {
-    if (!isBackendConfigured) {
-      setBookStatus('Backend API is not configured for this deployment.')
-      showToast('Backend API is not configured', 'error')
+    if (isDemoMode) {
+      setBookStatus('Manual order controls require backend mode.')
       return
     }
     try {
@@ -207,9 +207,8 @@ export default function App() {
   }
 
   const cancelManualOrder = async () => {
-    if (!isBackendConfigured) {
-      setBookStatus('Backend API is not configured for this deployment.')
-      showToast('Backend API is not configured', 'error')
+    if (isDemoMode) {
+      setBookStatus('Manual order controls require backend mode.')
       return
     }
     try {
@@ -228,9 +227,8 @@ export default function App() {
   }
 
   const matchManual = async () => {
-    if (!isBackendConfigured) {
-      setBookStatus('Backend API is not configured for this deployment.')
-      showToast('Backend API is not configured', 'error')
+    if (isDemoMode) {
+      setBookStatus('Manual order controls require backend mode.')
       return
     }
     try {
@@ -272,9 +270,8 @@ export default function App() {
   }
 
   const resetManual = async () => {
-    if (!isBackendConfigured) {
-      setBookStatus('Backend API is not configured for this deployment.')
-      showToast('Backend API is not configured', 'error')
+    if (isDemoMode) {
+      setBookStatus('Manual order controls require backend mode.')
       return
     }
     try {
@@ -323,10 +320,13 @@ export default function App() {
     setError('')
     showToast('Run Simulation started', 'info')
     const payload = { ...cfg, strategy_enabled: strategyEnabled }
-    if (!isBackendConfigured) {
-      setError('Backend API is not configured for this deployment. Set VITE_API_BASE_URL in GitHub secrets and redeploy.')
-      setResultSource('none')
-      showToast('Backend API is not configured', 'error')
+    if (isDemoMode) {
+      const demo = generateDemoResult(cfg)
+      setResult(demo)
+      setResultSource('demo')
+      setPlayIdx(0)
+      setAutoPlay(true)
+      showToast('Run Simulation completed', 'success')
       setLoading(false)
       return
     }
@@ -346,9 +346,12 @@ export default function App() {
       setAutoPlay(true)
       showToast('Run Simulation completed', 'success')
     } catch (e) {
-      setError('Backend unavailable. Check deployed API URL and CORS.')
-      setResultSource('none')
-      showToast('Backend unavailable', 'error')
+      const demo = generateDemoResult(cfg)
+      setResult(demo)
+      setResultSource('demo-fallback')
+      setPlayIdx(0)
+      setAutoPlay(true)
+      showToast('Backend unavailable; showing demo results', 'warn')
     } finally {
       setLoading(false)
     }
