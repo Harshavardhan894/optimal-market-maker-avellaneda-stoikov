@@ -35,6 +35,11 @@ class MarketMakerConfig:
     high_toxicity_spread_boost: float = 1.35
     high_toxicity_size_factor: float = 0.55
     one_sided_toxic_mode: bool = True
+    adaptive_risk: bool = True
+    adaptive_alpha: float = 0.12
+    adaptive_drawdown_spread_boost: float = 1.6
+    adaptive_drawdown_size_factor: float = 0.65
+    adaptive_recovery_tighten: float = 0.9
 
 
 @dataclass
@@ -42,6 +47,9 @@ class AvellanedaStoikovMarketMaker:
     config: MarketMakerConfig
     active_order_ids: List[int] = field(default_factory=list)
     active: bool = True
+    last_pnl: float | None = None
+    pnl_delta_ema: float = 0.0
+    peak_pnl: float = 0.0
 
     def _effective_sigma(self, sigma_t: float | None = None) -> float:
         sigma = self.config.sigma if sigma_t is None else sigma_t
@@ -90,6 +98,21 @@ class AvellanedaStoikovMarketMaker:
             self.cancel_stale_orders(lob)
             return
 
+        # Online adaptation from realized PnL path.
+        # Negative PnL slope / drawdown => widen quotes and cut size.
+        # Positive recovery => cautiously tighten spread.
+        if self.last_pnl is None:
+            self.last_pnl = pnl
+            self.peak_pnl = pnl
+        pnl_delta = pnl - (self.last_pnl if self.last_pnl is not None else pnl)
+        self.last_pnl = pnl
+        self.peak_pnl = max(self.peak_pnl, pnl)
+
+        a = max(0.01, min(0.95, self.config.adaptive_alpha))
+        self.pnl_delta_ema = a * pnl_delta + (1.0 - a) * self.pnl_delta_ema
+        drawdown = max(0.0, self.peak_pnl - pnl)
+        drawdown_ratio = drawdown / max(abs(self.peak_pnl) + 1.0, 1.0)
+
         self.cancel_stale_orders(lob)
         market_spread = None
         if best_bid is not None and best_ask is not None and best_ask >= best_bid:
@@ -117,6 +140,15 @@ class AvellanedaStoikovMarketMaker:
         high_toxicity = toxicity >= self.config.high_toxicity_threshold
         if high_toxicity:
             d *= self.config.high_toxicity_spread_boost
+
+        if self.config.adaptive_risk:
+            if self.pnl_delta_ema < 0 or drawdown_ratio > 0:
+                # Stronger protection when losses persist.
+                stress = min(1.0, max(0.0, -self.pnl_delta_ema) / (sigma_eff + 1e-8) + drawdown_ratio)
+                d *= 1.0 + (self.config.adaptive_drawdown_spread_boost - 1.0) * stress
+            else:
+                # Mild tightening during stable recovery.
+                d *= self.config.adaptive_recovery_tighten
 
         # Extra skew to reinforce inventory mean reversion.
         # inventory > 0 -> shift both quotes down (sell easier, buy harder)
@@ -148,6 +180,13 @@ class AvellanedaStoikovMarketMaker:
         if high_toxicity:
             buy_size = max(1, int(math.floor(buy_size * self.config.high_toxicity_size_factor)))
             sell_size = max(1, int(math.floor(sell_size * self.config.high_toxicity_size_factor)))
+
+        if self.config.adaptive_risk:
+            if self.pnl_delta_ema < 0 or drawdown_ratio > 0:
+                stress = min(1.0, max(0.0, -self.pnl_delta_ema) / (sigma_eff + 1e-8) + drawdown_ratio)
+                size_factor = 1.0 - (1.0 - self.config.adaptive_drawdown_size_factor) * stress
+                buy_size = max(1, int(math.floor(buy_size * size_factor)))
+                sell_size = max(1, int(math.floor(sell_size * size_factor)))
 
         allow_buy = inventory < self.config.max_inventory
         allow_sell = inventory > -self.config.max_inventory
