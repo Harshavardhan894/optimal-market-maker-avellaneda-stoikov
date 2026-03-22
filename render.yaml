@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: optimal-market-maker-api
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    autoDeploy: true

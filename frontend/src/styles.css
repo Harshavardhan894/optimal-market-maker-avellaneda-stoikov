@@ -1,0 +1,159 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: linear-gradient(145deg, #0f172a, #111827);
+  color: #e5e7eb;
+}
+
+.shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.card {
+  background: rgba(17, 24, 39, 0.85);
+  border: 1px solid rgba(75, 85, 99, 0.5);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.25);
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.metrics-grid {
+  margin-bottom: 16px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.metrics-grid strong {
+  display: block;
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.manual-controls {
+  margin-bottom: 16px;
+}
+
+.manual-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.manual-status {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #93c5fd;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+input[type="number"],
+input[type="range"] {
+  border-radius: 10px;
+  border: 1px solid #374151;
+  background: #0b1220;
+  color: #e5e7eb;
+  padding: 8px;
+}
+
+input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+
+button {
+  border: none;
+  border-radius: 10px;
+  background: #2563eb;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 40px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.book {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.summary {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.trade-log {
+  margin-bottom: 16px;
+}
+
+.log-head,
+.log-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr 1fr 1fr;
+  gap: 8px;
+  font-size: 12px;
+  padding: 6px 0;
+}
+
+.log-head {
+  font-weight: 700;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.log-row {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.toast {
+  position: fixed;
+  right: 20px;
+  top: 20px;
+  z-index: 1000;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: #1f2937;
+  color: #e5e7eb;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+  font-size: 13px;
+}
+
+.toast.success {
+  border-color: #22c55e;
+}
+
+.toast.warn {
+  border-color: #f59e0b;
+}
+
+.toast.error {
+  border-color: #ef4444;
+}
