@@ -13,8 +13,9 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend)
 
-const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
-const DEMO_MODE = String(import.meta.env.VITE_DEMO_MODE || 'false') === 'true'
+const ENV_API = String(import.meta.env.VITE_API_BASE_URL || '').trim()
+const ENV_DEMO_MODE = String(import.meta.env.VITE_DEMO_MODE || 'false') === 'true'
+const DEFAULT_API = ENV_API || (import.meta.env.DEV ? 'http://localhost:8000' : '')
 
 function createSeededRng(seed) {
   let state = (Number(seed) || 1) >>> 0
@@ -107,6 +108,7 @@ function generateDemoResult(cfg) {
 }
 
 export default function App() {
+  const [apiBase, setApiBase] = useState(() => localStorage.getItem('apiBaseUrl') || DEFAULT_API)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
@@ -136,6 +138,7 @@ export default function App() {
   const [uiCash, setUiCash] = useState(0)
   const [toast, setToast] = useState({ message: '', type: 'info', visible: false })
   const toastTimerRef = useRef(null)
+  const isDemoMode = ENV_DEMO_MODE && !apiBase
 
   const showToast = (message, type = 'info') => {
     if (toastTimerRef.current) {
@@ -148,13 +151,14 @@ export default function App() {
   }
 
   const callApi = async (path, init = {}) => {
-    const res = await fetch(`${API}${path}`, init)
+    if (!apiBase) throw new Error('Backend API URL not configured')
+    const res = await fetch(`${apiBase}${path}`, init)
     if (!res.ok) throw new Error(`API error: ${res.status}`)
     return res.json()
   }
 
   const refreshBook = async () => {
-    if (DEMO_MODE) {
+    if (isDemoMode) {
       setBookStatus('Manual order controls require backend mode (set VITE_DEMO_MODE=false).')
       showToast('Refresh Book clicked (backend mode required)', 'warn')
       return
@@ -171,7 +175,7 @@ export default function App() {
   }
 
   const addManualOrder = async (isBuy) => {
-    if (DEMO_MODE) {
+    if (isDemoMode) {
       setBookStatus('Manual order controls require backend mode (set VITE_DEMO_MODE=false).')
       showToast(`${isBuy ? 'Add Buy Order' : 'Add Sell Order'} clicked (backend mode required)`, 'warn')
       return
@@ -204,7 +208,7 @@ export default function App() {
   }
 
   const cancelManualOrder = async () => {
-    if (DEMO_MODE) {
+    if (isDemoMode) {
       setBookStatus('Manual order controls require backend mode (set VITE_DEMO_MODE=false).')
       showToast('Cancel Order clicked (backend mode required)', 'warn')
       return
@@ -225,7 +229,7 @@ export default function App() {
   }
 
   const matchManual = async () => {
-    if (DEMO_MODE) {
+    if (isDemoMode) {
       setBookStatus('Manual order controls require backend mode (set VITE_DEMO_MODE=false).')
       showToast('Match Now clicked (backend mode required)', 'warn')
       return
@@ -269,7 +273,7 @@ export default function App() {
   }
 
   const resetManual = async () => {
-    if (DEMO_MODE) {
+    if (isDemoMode) {
       setBookStatus('Manual order controls require backend mode (set VITE_DEMO_MODE=false).')
       showToast('Reset Book clicked (backend mode required)', 'warn')
       return
@@ -292,9 +296,17 @@ export default function App() {
   }
 
   useEffect(() => {
+    if (apiBase) {
+      localStorage.setItem('apiBaseUrl', apiBase)
+    } else {
+      localStorage.removeItem('apiBaseUrl')
+    }
+  }, [apiBase])
+
+  useEffect(() => {
     refreshBook()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [isDemoMode, apiBase])
 
   useEffect(() => () => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
@@ -320,7 +332,7 @@ export default function App() {
     setError('')
     showToast('Run Simulation started', 'info')
     const payload = { ...cfg, strategy_enabled: strategyEnabled }
-    if (DEMO_MODE) {
+    if (isDemoMode) {
       const demo = generateDemoResult(cfg)
       setResult(demo)
       setResultSource('demo-config')
@@ -331,7 +343,7 @@ export default function App() {
       return
     }
     try {
-      const response = await fetch(`${API}/run`, {
+      const response = await fetch(`${apiBase}/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -445,9 +457,19 @@ export default function App() {
       </section>
 
       <section className="card">
-        Mode: <strong>{DEMO_MODE ? 'Demo mode (no backend)' : 'Backend mode'}</strong>
+        Mode: <strong>{isDemoMode ? 'Demo mode (no backend)' : 'Backend mode'}</strong>
         {' | '}Result source: <strong>{resultSource}</strong>
-        {' | '}API: <strong>{API}</strong>
+        {' | '}API: <strong>{apiBase || 'not set'}</strong>
+        <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            type="text"
+            placeholder="https://your-backend-url"
+            value={apiBase}
+            onChange={(e) => setApiBase(e.target.value.trim())}
+            style={{ minWidth: 320 }}
+          />
+          <button onClick={() => setApiBase('')}>Use Demo</button>
+        </div>
       </section>
 
       <section className="card manual-controls">
