@@ -46,27 +46,29 @@ function generateDemoResult(cfg, strategyEnabled = true) {
   let lastPnl = 0
 
   for (let t = 1; t <= ticks; t += 1) {
-    const advShock = advOn && rand() < 0.2 ? (rand() < 0.5 ? -1 : 1) * (0.7 + 0.8 * rand()) : 0
+    const advShock = advOn && rand() < 0.3 ? (rand() < 0.5 ? -1 : 1) * (0.9 + 1.1 * rand()) : 0
     const eps = (rand() - 0.5) * 2
-    price = Math.max(1, price + 0.03 + sigma * (0.6 * eps + 0.4 * advShock))
+    price = Math.max(1, price + 0.02 + sigma * (0.75 * eps + 0.25 * advShock))
 
     const trend = price > prevPrice ? 1 : price < prevPrice ? -1 : 0
     const r = price - inventory * gamma * (sigma ** 2)
-    const d = baseDelta * (advOn ? 1.2 : 1.0)
+    const d = baseDelta * (advOn ? 1.1 : 1.0)
     const bid = r - d
     const ask = r + d
 
     if (strategyActive) {
-      let buyProb = 0.5
-      let sellProb = 0.5
+      let buyProb = 0.52
+      let sellProb = 0.52
 
       if (advOn) {
-        if (trend > 0) {
-          sellProb += 0.18
-          buyProb -= 0.12
-        } else if (trend < 0) {
-          buyProb += 0.18
-          sellProb -= 0.12
+        // Adverse selection: toxic flow lifts our ask into rising prices,
+        // or hits our bid into falling prices.
+        if (trend >= 0) {
+          sellProb += 0.25
+          buyProb -= 0.18
+        } else {
+          buyProb += 0.25
+          sellProb -= 0.18
         }
       }
 
@@ -87,6 +89,15 @@ function generateDemoResult(cfg, strategyEnabled = true) {
         cash += ask
         spreadCapture += Math.max(0, ask - price)
         trades += 1
+      }
+
+      // Toxic continuation move after getting hit on the wrong side.
+      if (advOn && rand() < 0.25) {
+        if (trend >= 0 && sellProb > buyProb) {
+          price = Math.max(1, price + 0.35 * sigma)
+        } else if (trend < 0 && buyProb > sellProb) {
+          price = Math.max(1, price - 0.35 * sigma)
+        }
       }
     }
 
